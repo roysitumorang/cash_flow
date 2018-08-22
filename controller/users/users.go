@@ -40,6 +40,19 @@ func Create(c echo.Context) error {
 	return c.JSON(http.StatusCreated, u)
 }
 
+func Activate(c echo.Context) error {
+	var err error
+	u, err := user.FindByActivationToken(c.Param("token"))
+	if err != nil {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "Not Found"})
+	}
+	err = u.Activate()
+	if err != nil {
+		return c.JSON(http.StatusUnprocessableEntity, map[string]string{"error": "Unprocessable Entity"})
+	}
+	return c.JSON(http.StatusOK, u)
+}
+
 func Show(c echo.Context) error {
 	var err error
 	id, err := strconv.Atoi(c.Param("id"))
@@ -63,9 +76,13 @@ func Update(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "Not Found"})
 	}
+	password := c.FormValue("password")
 	u.Name = c.FormValue("name")
 	u.Email = c.FormValue("email")
-	u.Password = c.FormValue("password")
+	if password != "" {
+		u.Password = password
+		u.PasswordConfirmation = c.FormValue("password_confirmation")
+	}
 	if !u.Validate() {
 		return c.JSON(http.StatusUnprocessableEntity, map[string]map[string]string{"errors": u.Errors})
 	}

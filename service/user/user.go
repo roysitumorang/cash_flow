@@ -51,6 +51,117 @@ func Find(userId int) (*User, error) {
 	return u, nil
 }
 
+func FindByActivationToken(token string) (*User, error) {
+	var u = New()
+	err := conn.DB.QueryRow(
+		`SELECT
+			id,
+			name,
+			email,
+			password_hash,
+			password_token,
+			activation_token,
+			activated_at,
+			time_zone,
+			created_at,
+			updated_at,
+			deleted_at
+		FROM users
+		WHERE deleted_at IS NULL AND activation_token = $1`,
+		token,
+	).Scan(
+		&u.Id,
+		&u.Name,
+		&u.Email,
+		&u.PasswordHash,
+		&u.PasswordToken,
+		&u.ActivationToken,
+		&u.ActivatedAt,
+		&u.TimeZone,
+		&u.CreatedAt,
+		&u.UpdatedAt,
+		&u.DeletedAt,
+	)
+	if err != nil {
+		return u, err
+	}
+	return u, nil
+}
+
+func FindByPasswordToken(token string) (*User, error) {
+	var u = New()
+	err := conn.DB.QueryRow(
+		`SELECT
+			id,
+			name,
+			email,
+			password_hash,
+			password_token,
+			activation_token,
+			activated_at,
+			time_zone,
+			created_at,
+			updated_at,
+			deleted_at
+		FROM users
+		WHERE deleted_at IS NULL AND password_token = $1`,
+		token,
+	).Scan(
+		&u.Id,
+		&u.Name,
+		&u.Email,
+		&u.PasswordHash,
+		&u.PasswordToken,
+		&u.ActivationToken,
+		&u.ActivatedAt,
+		&u.TimeZone,
+		&u.CreatedAt,
+		&u.UpdatedAt,
+		&u.DeletedAt,
+	)
+	if err != nil {
+		return u, err
+	}
+	return u, nil
+}
+
+func FindByEmail(email string) (*User, error) {
+	var u = New()
+	err := conn.DB.QueryRow(
+		`SELECT
+			id,
+			name,
+			email,
+			password_hash,
+			password_token,
+			activation_token,
+			activated_at,
+			time_zone,
+			created_at,
+			updated_at,
+			deleted_at
+		FROM users
+		WHERE deleted_at IS NULL AND email = $1`,
+		email,
+	).Scan(
+		&u.Id,
+		&u.Name,
+		&u.Email,
+		&u.PasswordHash,
+		&u.PasswordToken,
+		&u.ActivationToken,
+		&u.ActivatedAt,
+		&u.TimeZone,
+		&u.CreatedAt,
+		&u.UpdatedAt,
+		&u.DeletedAt,
+	)
+	if err != nil {
+		return u, err
+	}
+	return u, nil
+}
+
 func Where(term string, page int) (Users, error) {
 	var err error
 	users := Users{}
@@ -184,6 +295,89 @@ func (u *User) Create() error {
 	return nil
 }
 
+func (u *User) Activate() error {
+	var err error
+	stmt, err := conn.DB.Prepare(
+		`UPDATE users SET
+			activation_token = $1,
+			activated_at = $2,
+			updated_at = $3
+                WHERE deleted_at IS NULL AND activation_token IS NOT NULL AND activated_at IS NULL AND id = $4`)
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	_, err = stmt.Exec(
+		nil,
+		now,
+		now,
+		u.Id,
+	)
+	if err == nil {
+		u.ActivationToken = nil
+		u.ActivatedAt = &now
+		u.UpdatedAt = &now
+	}
+	return err
+}
+
+func (u *User) ResetPassword() error {
+	var err error
+	stmt, err := conn.DB.Prepare(
+		`UPDATE users SET
+			password_token = $1,
+			updated_at = $2
+                WHERE deleted_at IS NULL AND id = $3`)
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	passwordToken, err := crypt.GenerateRandomString(64)
+	if err != nil {
+		return err
+	}
+	_, err = stmt.Exec(
+		passwordToken,
+		now,
+		u.Id,
+	)
+	if err == nil {
+		u.PasswordToken = &passwordToken
+		u.UpdatedAt = &now
+	}
+	return err
+}
+
+func (u *User) SavePassword() error {
+	var err error
+	stmt, err := conn.DB.Prepare(
+		`UPDATE users SET
+			password_token = $1,
+			password_hash = $2,
+			updated_at = $3
+                WHERE deleted_at IS NULL AND id = $4`)
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	hash, err := crypt.HashAndSalt(u.Password)
+	if err != nil {
+		return err
+	}
+	_, err = stmt.Exec(
+		nil,
+		hash,
+		now,
+		u.Id,
+	)
+	if err == nil {
+		u.PasswordToken = nil
+		u.PasswordHash = hash
+		u.UpdatedAt = &now
+	}
+	return err
+}
+
 func (u *User) Update() error {
 	var err error
 	stmt, err := conn.DB.Prepare(
@@ -201,7 +395,7 @@ func (u *User) Update() error {
 		u.Name,
 		u.Email,
 		u.TimeZone,
-		now.Format("2006-01-02 15:04:05"),
+		now,
 		u.Id,
 	)
 	if err == nil {
@@ -218,7 +412,7 @@ func (u *User) Destroy() error {
 	}
 	now := time.Now().UTC()
 	_, err = stmt.Exec(
-		now.Format("2006-01-02 15:04:05"),
+		now,
 		u.Id,
 	)
 	if err == nil {

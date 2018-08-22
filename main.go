@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cash_flow/controller/password"
 	"cash_flow/controller/users"
 	"cash_flow/util/conn"
 	"github.com/labstack/echo"
@@ -18,7 +19,10 @@ func main() {
 	e.POST("/api/v1/users", users.Create)
 	e.GET("/api/v1/users/:id", users.Show)
 	e.PUT("/api/v1/users/:id", users.Update)
+	e.PUT("/api/v1/users/:token/activate", users.Activate)
 	e.DELETE("/api/v1/users/:id", users.Destroy)
+	e.PUT("/api/v1/password/reset", password.Reset)
+	e.PUT("/api/v1/password/:token/save", password.Save)
 	e.Logger.Fatal(e.Start(":3000"))
 }
 
