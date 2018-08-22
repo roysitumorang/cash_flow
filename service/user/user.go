@@ -2,7 +2,7 @@ package user
 
 import (
 	"cash_flow/util/conn"
-	"cash_flow/util/password"
+	"cash_flow/util/crypt"
 	"fmt"
 	"regexp"
 	"strings"
@@ -157,18 +157,23 @@ func (u *User) Create() error {
 	if err != nil {
 		return err
 	}
-	hash, err := password.HashAndSalt(u.Password)
+	hash, err := crypt.HashAndSalt(u.Password)
 	if err != nil {
 		return err
 	}
-	now := time.Now()
+	activationToken, err := crypt.GenerateRandomString(64)
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
 	u.PasswordHash = hash
+	u.ActivationToken = &activationToken
 	u.TimeZone = "UTC"
 	err = stmt.QueryRow(
 		u.Name,
 		u.Email,
 		u.PasswordHash,
-		nil,
+		u.ActivationToken,
 		u.TimeZone,
 		now,
 	).Scan(&u.Id)
@@ -191,7 +196,7 @@ func (u *User) Update() error {
 	if err != nil {
 		return err
 	}
-	now := time.Now()
+	now := time.Now().UTC()
 	_, err = stmt.Exec(
 		u.Name,
 		u.Email,
@@ -211,7 +216,7 @@ func (u *User) Destroy() error {
 	if err != nil {
 		return err
 	}
-	now := time.Now()
+	now := time.Now().UTC()
 	_, err = stmt.Exec(
 		now.Format("2006-01-02 15:04:05"),
 		u.Id,
