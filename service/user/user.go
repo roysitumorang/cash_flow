@@ -4,6 +4,8 @@ import (
 	"cash_flow/util/conn"
 	"cash_flow/util/crypt"
 	"fmt"
+	"github.com/dgrijalva/jwt-go"
+	"golang.org/x/crypto/bcrypt"
 	"regexp"
 	"strings"
 	"time"
@@ -162,6 +164,29 @@ func FindByEmail(email string) (*User, error) {
 	return u, nil
 }
 
+func Authenticate(email, password string) (string, error) {
+	var (
+		err error
+	)
+	u, err := FindByEmail(email)
+	if err != nil {
+		return "", err
+	}
+	err = bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password))
+	if err != nil {
+		return "", err
+	}
+	token := jwt.New(jwt.SigningMethodHS256)
+	claims := token.Claims.(jwt.MapClaims)
+	claims["UserId"] = u.Id
+	claims["exp"] = time.Now().UTC().Add(time.Hour * 72).Unix()
+	t, err := token.SignedString([]byte("secret"))
+	if err != nil {
+		return "", err
+	}
+	return t, err
+}
+
 func Where(term string, page int) (Users, error) {
 	var err error
 	users := Users{}
@@ -268,7 +293,7 @@ func (u *User) Create() error {
 	if err != nil {
 		return err
 	}
-	hash, err := crypt.HashAndSalt(u.Password)
+	hash, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
@@ -277,7 +302,7 @@ func (u *User) Create() error {
 		return err
 	}
 	now := time.Now().UTC()
-	u.PasswordHash = hash
+	u.PasswordHash = string(hash)
 	u.ActivationToken = &activationToken
 	u.TimeZone = "UTC"
 	err = stmt.QueryRow(
@@ -360,7 +385,7 @@ func (u *User) SavePassword() error {
 		return err
 	}
 	now := time.Now().UTC()
-	hash, err := crypt.HashAndSalt(u.Password)
+	hash, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
@@ -372,7 +397,7 @@ func (u *User) SavePassword() error {
 	)
 	if err == nil {
 		u.PasswordToken = nil
-		u.PasswordHash = hash
+		u.PasswordHash = string(hash)
 		u.UpdatedAt = &now
 	}
 	return err
@@ -384,16 +409,25 @@ func (u *User) Update() error {
 		`UPDATE users SET
 			name = $1,
 			email = $2,
-			time_zone = $3,
-			updated_at = $4
-                WHERE deleted_at IS NULL AND id = $5`)
+			password_hash = $3,
+			time_zone = $4,
+			updated_at = $5
+                WHERE deleted_at IS NULL AND id = $6`)
 	if err != nil {
 		return err
 	}
 	now := time.Now().UTC()
+	if u.Password != "" {
+		hash, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)
+		if err != nil {
+			return err
+		}
+		u.PasswordHash = string(hash)
+	}
 	_, err = stmt.Exec(
 		u.Name,
 		u.Email,
+		u.PasswordHash,
 		u.TimeZone,
 		now,
 		u.Id,

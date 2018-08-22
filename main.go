@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cash_flow/controller/account"
 	"cash_flow/controller/password"
 	"cash_flow/controller/users"
 	"cash_flow/util/conn"
@@ -15,14 +16,22 @@ func main() {
 	e := echo.New()
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
-	e.GET("/api/v1/users", users.Index)
-	e.POST("/api/v1/users", users.Create)
-	e.GET("/api/v1/users/:id", users.Show)
-	e.PUT("/api/v1/users/:id", users.Update)
-	e.PUT("/api/v1/users/:token/activate", users.Activate)
-	e.DELETE("/api/v1/users/:id", users.Destroy)
-	e.PUT("/api/v1/password/reset", password.Reset)
-	e.PUT("/api/v1/password/:token/save", password.Save)
+	u := e.Group("/api/v1")
+	u.GET("/users", users.Index)
+	u.POST("/users", users.Create)
+	u.GET("/users/:id", users.Show)
+	u.PUT("/users/:id", users.Update)
+	u.PUT("/users/:token/activate", users.Activate)
+	u.DELETE("/users/:id", users.Destroy)
+	u.POST("/account/create", account.Create)
+	u.PUT("/account/:token/activate", account.Activate)
+	u.PUT("/account/login", account.Login)
+	u.PUT("/password/reset", password.Reset)
+	u.PUT("/password/:token/save", password.Save)
+	r := e.Group("/api/v1/restricted")
+	r.Use(middleware.JWT([]byte("secret")))
+	r.GET("/account", account.Show)
+	r.PUT("/account", account.Update)
 	e.Logger.Fatal(e.Start(":3000"))
 }
 

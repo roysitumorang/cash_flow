@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
-	"golang.org/x/crypto/bcrypt"
 	"io"
 )
 
@@ -44,17 +43,4 @@ func GenerateRandomString(n int) (string, error) {
 func GenerateRandomStringURLSafe(n int) (string, error) {
 	b, err := GenerateRandomBytes(n)
 	return base64.URLEncoding.EncodeToString(b), err
-}
-
-func HashAndSalt(password string) (string, error) {
-	var (
-		err   error
-		bytes []byte
-	)
-	copy(bytes[:], password)
-	hash, err := bcrypt.GenerateFromPassword(bytes, bcrypt.MinCost)
-	if err != nil {
-		return "", err
-	}
-	return string(hash), err
 }
