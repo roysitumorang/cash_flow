@@ -29,7 +29,12 @@ func Create(c echo.Context) error {
 	u.Name = c.FormValue("name")
 	u.Email = c.FormValue("email")
 	u.Password = c.FormValue("password")
-	if err := u.Create(); err != nil {
+	u.PasswordConfirmation = c.FormValue("password_confirmation")
+	if !u.Validate() {
+		return c.JSON(http.StatusUnprocessableEntity, map[string]map[string]string{"errors": u.Errors})
+	}
+	err := u.Create()
+	if err != nil {
 		return err
 	}
 	return c.JSON(http.StatusCreated, u)
@@ -61,6 +66,9 @@ func Update(c echo.Context) error {
 	u.Name = c.FormValue("name")
 	u.Email = c.FormValue("email")
 	u.Password = c.FormValue("password")
+	if !u.Validate() {
+		return c.JSON(http.StatusUnprocessableEntity, map[string]map[string]string{"errors": u.Errors})
+	}
 	err = u.Update()
 	if err != nil {
 		return c.JSON(http.StatusUnprocessableEntity, map[string]string{"error": "Unprocessable Entity"})

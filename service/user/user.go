@@ -4,7 +4,10 @@ import (
 	"cash_flow/util/conn"
 	"cash_flow/util/password"
 	"fmt"
+	"regexp"
+	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 func New() *User {
@@ -104,6 +107,43 @@ func Where(term string, page int) (Users, error) {
 	return users, err
 }
 
+func (u *User) Validate() bool {
+	u.Errors = make(map[string]string)
+	re := regexp.MustCompile(".+@.+\\..+")
+	if strings.TrimSpace(u.Name) == "" {
+		u.Errors["name"] = "blank name"
+	}
+	if strings.TrimSpace(u.Email) == "" {
+		u.Errors["email"] = "blank email address"
+	} else if matched := re.Match([]byte(u.Email)); !matched {
+		u.Errors["email"] = "invalid email address"
+	} else {
+		var conflict int
+		if u.Id == nil {
+			stmt, _ := conn.DB.Prepare(`SELECT COUNT(1) FROM users WHERE email = $1`)
+			stmt.QueryRow(u.Email).Scan(&conflict)
+		} else {
+			stmt, _ := conn.DB.Prepare(`SELECT COUNT(1) FROM users WHERE email = $1 AND id != $2`)
+			stmt.QueryRow(u.Email, u.Id).Scan(&conflict)
+		}
+		if conflict > 0 {
+			u.Errors["email"] = "email exists"
+		}
+	}
+	if u.Id == nil {
+		if strings.TrimSpace(u.Password) == "" {
+			u.Errors["password"] = "blank password"
+		} else if utf8.RuneCountInString(strings.TrimSpace(u.PasswordConfirmation)) < 6 {
+			u.Errors["password"] = "minimum 6 characters"
+		} else if strings.TrimSpace(u.PasswordConfirmation) == "" {
+			u.Errors["password"] = "blank password confirmation"
+		} else if u.Password != u.PasswordConfirmation {
+			u.Errors["password"] = "invalid password confirmation"
+		}
+	}
+	return len(u.Errors) == 0
+}
+
 func (u *User) Create() error {
 	stmt, err := conn.DB.Prepare(
 		`INSERT INTO users (
@@ -145,13 +185,9 @@ func (u *User) Update() error {
 		`UPDATE users SET
 			name = $1,
 			email = $2,
-			password_hash = $3,
-			password_token = $4,
-			activation_token = $5,
-			activated_at = $6,
-			time_zone = $7,
-			updated_at = $8
-                WHERE deleted_at IS NULL AND id = $9`)
+			time_zone = $3,
+			updated_at = $4
+                WHERE deleted_at IS NULL AND id = $5`)
 	if err != nil {
 		return err
 	}
@@ -159,10 +195,6 @@ func (u *User) Update() error {
 	_, err = stmt.Exec(
 		u.Name,
 		u.Email,
-		u.PasswordHash,
-		u.PasswordToken,
-		u.ActivationToken,
-		u.ActivatedAt,
 		u.TimeZone,
 		now.Format("2006-01-02 15:04:05"),
 		u.Id,
